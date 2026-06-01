@@ -2,7 +2,7 @@
 
 Turn long YouTube videos into viral short-form clips with one command.
 
-Clipreator downloads a YouTube video, transcribes it with Whisper, uses Claude AI to find the most engaging moments, then auto-edits them into vertical clips with captions — ready for TikTok, Reels, and Shorts.
+Clipreator downloads a YouTube video, transcribes it with Whisper, uses AI to find the most engaging moments, then auto-edits them into vertical clips with captions — ready for TikTok, Reels, and Shorts.
 
 ## Demo
 
@@ -18,6 +18,7 @@ clipreator -url="https://youtu.be/your-video-id"
 ✅ Transcription complete! 312 segments found
 
 🧠 Analyzing transcript for viral clips...
+    🧠 Using Claude...
 🎬 Found 5 potential clips:
 
   Clip 1: We're Here To Take The Trophy From Them
@@ -41,7 +42,7 @@ clipreator -url="https://youtu.be/your-video-id"
 
 1. **Downloads** the audio from any YouTube video using `yt-dlp`
 2. **Transcribes** with OpenAI Whisper running locally — word-level timestamps included
-3. **Finds the best clips** by sending the transcript to Claude, which identifies the 3-5 most viral-worthy 30-90 second segments
+3. **Finds the best clips** using AI (Claude or OpenAI — your choice) to identify the 3-5 most viral-worthy 30-90 second segments
 4. **Downloads the full video** and cuts at the AI-selected timestamps
 5. **Crops to 9:16 vertical** — center crop optimized for short-form platforms
 6. **Removes dead space** — detects silence gaps and cuts them out for tighter pacing
@@ -53,7 +54,7 @@ clipreator -url="https://youtu.be/your-video-id"
 - **Python** 3.8+ (for Whisper)
 - **ffmpeg** with libass and libfreetype (for captions)
 - **yt-dlp** (for downloading)
-- **Anthropic API key**
+- **API key** — either Anthropic (Claude) or OpenAI
 
 ## Installation
 
@@ -73,11 +74,17 @@ pip install openai-whisper
 
 ### 2. Set your API key
 
+Pick one — Claude (recommended) or OpenAI:
+
 ```bash
+# Option A: Claude (recommended — better highlight detection)
 export ANTHROPIC_API_KEY=your-key-here
+
+# Option B: OpenAI
+export OPENAI_API_KEY=your-key-here
 ```
 
-Sign up at [console.anthropic.com](https://console.anthropic.com) if you don't have one.
+If both keys are set, Claude takes priority. Sign up at [console.anthropic.com](https://console.anthropic.com) or [platform.openai.com](https://platform.openai.com).
 
 ### 3. Build
 
@@ -115,9 +122,9 @@ YouTube URL
 └──────┬───────┘
        │
        ▼
-┌──────────────┐
-│  Claude AI   │  Pick best 3-5 viral moments
-└──────┬───────┘
+┌──────────────────┐
+│  Claude / OpenAI │  Pick best 3-5 viral moments
+└──────┬───────────┘
        │
        ▼
 ┌──────────────┐
@@ -131,7 +138,7 @@ YouTube URL
        │
        ▼
 ┌──────────────┐
-│  ffmpeg/ASS  │  Burn word-by-word captions
+│  ffmpeg/ASS  │  Burn synced word-by-word captions
 └──────┬───────┘
        │
        ▼
@@ -149,7 +156,7 @@ clipreator/
 │   ├── transcriber/
 │   │   └── transcriber.go   # Audio download + Whisper transcription
 │   ├── analyzer/
-│   │   └── analyzer.go      # Claude AI clip detection
+│   │   └── analyzer.go      # AI clip detection (Claude + OpenAI)
 │   ├── cutter/
 │   │   └── cutter.go        # Video cutting, cropping, silence removal
 │   └── captioner/
@@ -162,17 +169,23 @@ clipreator/
 
 - **Go** — orchestration and CLI
 - **OpenAI Whisper** — local speech-to-text with word-level timestamps
-- **Claude API** — AI-powered highlight detection
+- **Claude API / OpenAI API** — AI-powered highlight detection (bring your own key)
 - **ffmpeg** — video processing, cropping, caption rendering
 - **yt-dlp** — YouTube downloading
 
 ## Roadmap
 
+- [x] OpenAI API support
+- [x] Caption sync with silence removal
 - [ ] Ollama support (fully local, no API key needed)
-- [ ] Custom caption styles (font, color, position)
-- [ ] Face detection for smarter cropping
+- [ ] Custom caption styles (font, color, position, animation)
 - [ ] Config file for editable settings
+- [ ] Face detection for smarter cropping
 - [ ] Direct upload to TikTok/YouTube/Instagram
+
+## Disclaimer
+
+This tool is for personal and educational use. Users are responsible for ensuring they have the right to download and edit any content processed with Clipreator. Respect copyright laws and content creators' rights. Do not use this tool to repost others' content without permission.
 
 ## License
 
@@ -180,4 +193,4 @@ MIT
 
 ## Author
 
-Built by [Daniel Nwachukwu](https://github.com/Verifieddanny)
+Built by [DevDanny](https://github.com/Verifieddanny)
