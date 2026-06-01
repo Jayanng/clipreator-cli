@@ -43,6 +43,17 @@ type silentSegment struct {
 	End   float64
 }
 
+type ClipResult struct {
+	Path         string
+	KeptSegments []KeptSegment
+}
+
+type KeptSegment struct {
+	OrigStart float64
+	OrigEnd   float64
+	NewStart  float64
+}
+
 // detectSilence runs ffmpeg silencedetect and returns silent segments
 func detectSilence(videoPath string) ([]silentSegment, error) {
 	cmd := exec.Command("ffmpeg",
@@ -94,7 +105,6 @@ func detectSilence(videoPath string) ([]silentSegment, error) {
 	return segments, nil
 }
 
-// getVideoDuration returns the duration of a video in seconds
 func getVideoDuration(videoPath string) (float64, error) {
 	cmd := exec.Command("ffprobe",
 		"-v", "error",
@@ -109,17 +119,16 @@ func getVideoDuration(videoPath string) (float64, error) {
 	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
 
-func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, error) {
+func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]ClipResult, error) {
 	clipsDir := filepath.Join(outputDir, "clips")
 	os.MkdirAll(clipsDir, 0755)
 
-	var outputPaths []string
+	var results []ClipResult
 
 	for i, clip := range clips {
 		fmt.Printf("\n  ✂️  Clip %d: %s\n", i+1, clip.Title)
 		duration := clip.End - clip.Start
 
-		// Step 1: Raw cut from source
 		rawPath := filepath.Join(clipsDir, fmt.Sprintf("raw_%d.mp4", i+1))
 		fmt.Printf("    📐 Cutting raw segment (%.0fs)...\n", duration)
 
@@ -137,29 +146,24 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 			continue
 		}
 
-		// Step 2: Detect silence in raw clip
 		fmt.Printf("    🔇 Detecting dead space...\n")
 		silentParts, err := detectSilence(rawPath)
 		if err != nil {
-			fmt.Printf("    ⚠️  Silence detection failed, continuing without: %v\n", err)
 			silentParts = nil
 		}
 
 		totalDur, _ := getVideoDuration(rawPath)
 
-		// Build list of non-silent segments
 		type segment struct{ Start, End float64 }
 		var keepSegments []segment
 
 		if len(silentParts) > 0 {
-			// Sort silence segments
 			sort.Slice(silentParts, func(a, b int) bool {
 				return silentParts[a].Start < silentParts[b].Start
 			})
 
 			cursor := 0.0
 			for _, s := range silentParts {
-				// Only remove silence longer than 0.5s, keep a tiny pad
 				if s.Start-cursor > 0.1 {
 					keepSegments = append(keepSegments, segment{cursor, s.Start + 0.05})
 				}
@@ -182,11 +186,25 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 			fmt.Printf("    ✓ No significant dead space found\n")
 		}
 
-		// Step 3: Build the final clip with silence removed + vertical crop
+		// Build the time mapping for caption sync
+		var keptInfo []KeptSegment
+		newCursor := 0.0
+		for _, seg := range keepSegments {
+			segDur := seg.End - seg.Start
+			if segDur < 0.2 {
+				continue
+			}
+			keptInfo = append(keptInfo, KeptSegment{
+				OrigStart: seg.Start,
+				OrigEnd:   seg.End,
+				NewStart:  newCursor,
+			})
+			newCursor += segDur
+		}
+
 		outputPath := filepath.Join(clipsDir, fmt.Sprintf("clip_%d.mp4", i+1))
 
 		if len(keepSegments) == 1 && len(silentParts) == 0 {
-			// No silence removal needed, just crop to vertical
 			fmt.Printf("    📱 Cropping to 9:16 vertical...\n")
 			cmd = exec.Command("ffmpeg", "-y",
 				"-i", rawPath,
@@ -201,7 +219,6 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 				continue
 			}
 		} else {
-			// Cut each non-silent segment, crop, then concat
 			var segPaths []string
 			segDir := filepath.Join(clipsDir, fmt.Sprintf("segments_%d", i+1))
 			os.MkdirAll(segDir, 0755)
@@ -231,11 +248,9 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 			}
 
 			if len(segPaths) == 0 {
-				fmt.Printf("    ⚠️  No valid segments, skipping\n")
 				continue
 			}
 
-			// Create concat file
 			concatPath := filepath.Join(segDir, "concat.txt")
 			var concatContent strings.Builder
 			for _, sp := range segPaths {
@@ -244,7 +259,6 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 			}
 			os.WriteFile(concatPath, []byte(concatContent.String()), 0644)
 
-			// Concat all segments
 			fmt.Printf("    📱 Cropping to 9:16 + removing dead space...\n")
 			cmd = exec.Command("ffmpeg", "-y",
 				"-f", "concat", "-safe", "0",
@@ -254,22 +268,21 @@ func CutClips(videoPath, outputDir string, clips []analyzer.Clip) ([]string, err
 			)
 			cmd.Stderr = nil
 			if err := cmd.Run(); err != nil {
-				fmt.Printf("    ⚠️  Concat failed: %v\n", err)
 				continue
 			}
 
-			// Cleanup segment files
 			os.RemoveAll(segDir)
 		}
 
-		// Cleanup raw file
 		os.Remove(rawPath)
 
-		// Get final duration
 		finalDur, _ := getVideoDuration(outputPath)
 		fmt.Printf("    ✅ Saved: %s (%.0fs → %.0fs)\n", outputPath, duration, finalDur)
-		outputPaths = append(outputPaths, outputPath)
+		results = append(results, ClipResult{
+			Path:         outputPath,
+			KeptSegments: keptInfo,
+		})
 	}
 
-	return outputPaths, nil
+	return results, nil
 }

@@ -87,39 +87,42 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Step 4: Burn captions onto each clip
+	// Update references from clipPaths to results
 	fmt.Println("\n💬 Adding captions...")
 	clipsDir := filepath.Join(workDir, "clips")
 	var finalPaths []string
 
-	for i, clipPath := range clipPaths {
+	for i, clipResult := range clipPaths {
 		clip := result.Clips[i]
 		fmt.Printf("  💬 Captioning clip %d: %s\n", i+1, clip.Title)
 
 		words := captioner.ExtractWords(transcript, clip.Start, clip.End)
 		if len(words) == 0 {
 			fmt.Printf("    ⚠️  No word timestamps found, skipping captions\n")
-			finalPaths = append(finalPaths, clipPath)
+			finalPaths = append(finalPaths, clipResult.Path)
 			continue
 		}
-		fmt.Printf("    📝 %d words with timestamps\n", len(words))
+
+		// Remap timestamps to account for silence removal
+		words = captioner.RemapWords(words, clipResult.KeptSegments)
+		fmt.Printf("    📝 %d words synced to edited timeline\n", len(words))
 
 		captionedPath := filepath.Join(clipsDir, fmt.Sprintf("final_%d.mp4", i+1))
-		if err := captioner.BurnCaptions(clipPath, words, captionedPath); err != nil {
+		if err := captioner.BurnCaptions(clipResult.Path, words, captionedPath); err != nil {
 			fmt.Printf("    ⚠️  Failed to burn captions: %v\n", err)
-			finalPaths = append(finalPaths, clipPath)
+			finalPaths = append(finalPaths, clipResult.Path)
 			continue
 		}
 
-		os.Remove(clipPath)
-		os.Rename(captionedPath, clipPath)
-		fmt.Printf("    ✅ Captions burned!\n")
-		finalPaths = append(finalPaths, clipPath)
+		os.Remove(clipResult.Path)
+		os.Rename(captionedPath, clipResult.Path)
+		fmt.Printf("    ✅ Captions synced!\n")
+		finalPaths = append(finalPaths, clipResult.Path)
 	}
 
 	fmt.Printf("\n🎉 Done! %d clips ready:\n", len(clipPaths))
 	for _, p := range clipPaths {
-		fmt.Printf("  📎 %s\n", p)
+		fmt.Printf("  📎 %s\n", p.Path)
 	}
 
 }

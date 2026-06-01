@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Verifieddanny/clipreator-cli/internal/cutter"
 	"github.com/Verifieddanny/clipreator-cli/internal/transcriber"
 )
 
@@ -16,7 +17,6 @@ type CaptionWord struct {
 	End   float64
 }
 
-// ExtractWords pulls word-level timestamps for a clip's time range
 func ExtractWords(transcript *transcriber.Transcript, clipStart, clipEnd float64) []CaptionWord {
 	var words []CaptionWord
 	for _, seg := range transcript.Segments {
@@ -141,8 +141,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 	return os.WriteFile(outputPath, []byte(events.String()), 0644)
 }
 
-// BurnCaptions overlays captions onto a video using drawtext filters
-// BurnCaptions overlays ASS subtitles onto a video
 func BurnCaptions(videoPath string, words []CaptionWord, outputPath string) error {
 	// Generate ASS file
 	assPath := outputPath + ".ass"
@@ -173,4 +171,29 @@ func BurnCaptions(videoPath string, words []CaptionWord, outputPath string) erro
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
+}
+
+
+func RemapWords(words []CaptionWord, keptSegments []cutter.KeptSegment) []CaptionWord {
+	if len(keptSegments) == 0 {
+		return words
+	}
+
+	var remapped []CaptionWord
+	for _, w := range words {
+		for _, seg := range keptSegments {
+			if w.Start >= seg.OrigStart && w.End <= seg.OrigEnd+0.1 {
+				offset := w.Start - seg.OrigStart
+				newStart := seg.NewStart + offset
+				newEnd := newStart + (w.End - w.Start)
+				remapped = append(remapped, CaptionWord{
+					Text:  w.Text,
+					Start: newStart,
+					End:   newEnd,
+				})
+				break
+			}
+		}
+	}
+	return remapped
 }

@@ -97,7 +97,6 @@ TRANSCRIPT:
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the Claude API response
 	var apiResp struct {
 		Content []struct {
 			Text string `json:"text"`
@@ -111,7 +110,6 @@ TRANSCRIPT:
 		return nil, fmt.Errorf("empty response from API")
 	}
 
-	// Parse Claude's JSON response into our struct
 	var result AnalysisResult
 	if err := json.Unmarshal([]byte(sanitizeJSON(apiResp.Content[0].Text)), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse clip suggestions: %w\nRaw: %s", err, apiResp.Content[0].Text)
@@ -121,16 +119,12 @@ TRANSCRIPT:
 }
 
 func sanitizeJSON(input string) string {
-	// 1. Find the first occurrence of '{'
 	start := strings.Index(input, "{")
-	// 2. Find the last occurrence of '}'
 	end := strings.LastIndex(input, "}")
 
-	// 3. If both are found and start is before end, extract that slice
 	if start != -1 && end != -1 && start < end {
 		return input[start : end+1]
 	}
 
-	// Fallback to trimming if the markers aren't found
 	return strings.TrimSpace(input)
 }
